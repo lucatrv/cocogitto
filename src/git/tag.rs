@@ -79,6 +79,12 @@ pub struct Tag {
     pub oid: Option<Oid>,
 }
 
+impl Default for Tag {
+    fn default() -> Self {
+        Tag::create(Version::new(0, 0, 0), None)
+    }
+}
+
 impl Tag {
     // Tag always contains an oid unless it was created before the tag exist.
     // The only case where we do that is while creating the changelog during `cog bump`.

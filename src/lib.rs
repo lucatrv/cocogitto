@@ -417,18 +417,18 @@ impl CocoGitto {
         self.pre_bump_checks()?;
 
         let current_tag = self.repository.get_latest_tag();
-        let current_version = match current_tag {
-            Ok(ref tag) => tag.version.clone(),
+        let current_tag = match current_tag {
+            Ok(ref tag) => tag,
             Err(ref err) if err == &TagError::NoTag => {
                 warn!("Failed to get current version, falling back to 0.0.0");
-                Version::new(0, 0, 0)
+                Tag::default()
             }
             Err(ref err) => bail!("{}", err),
         };
 
-        let mut next_version = increment.bump(&current_version, &self.repository)?;
+        let mut next_version = current_tag.bump(increment, &self.repository)?;
 
-        if next_version.le(&current_version) || next_version.eq(&current_version) {
+        if next_version.version.le(&current_tag.version) || next_version.eq(&current_version) {
             let comparison = format!("{} <= {}", current_version, next_version).red();
             let cause_key = "cause:".red();
             let cause = format!(
@@ -521,11 +521,11 @@ impl CocoGitto {
 
         for (package_name, package) in &SETTINGS.packages {
             let current_tag = self.repository.get_latest_package_tag(package_name);
-            let current_version = match current_tag {
+            let current_tag = match current_tag {
                 Ok(ref tag) => tag.version.clone(),
                 Err(ref err) if err == &TagError::NoTag => {
                     warn!("Failed to get current version, falling back to 0.0.0");
-                    Version::new(0, 0, 0)
+                    Tag::default()
                 }
                 Err(ref err) => bail!("{}", err),
             };
@@ -640,16 +640,16 @@ impl CocoGitto {
         self.pre_bump_checks()?;
 
         let current_tag = self.repository.get_latest_package_tag(package_name);
-        let current_version = match current_tag {
-            Ok(ref tag) => tag.version.clone(),
+        let current_tag = match current_tag {
+            Ok(ref tag) => tag,
             Err(ref err) if err == &TagError::NoTag => {
                 warn!("Failed to get current version, falling back to 0.0.0");
-                Version::new(0, 0, 0)
+                Tag::default()
             }
             Err(ref err) => bail!("{}", err),
         };
 
-        let mut next_version = increment.bump(&current_version, &self.repository)?;
+        let mut next_version = current_tag.bump(increment, &self.repository)?;
 
         if next_version.le(&current_version) || next_version.eq(&current_version) {
             let comparison = format!("{} <= {}", current_version, &next_version).red();

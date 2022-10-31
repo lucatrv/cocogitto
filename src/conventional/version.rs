@@ -1,16 +1,17 @@
 use crate::conventional::commit::Commit;
 use crate::git::repository::Repository;
 use std::fmt;
-
+use crate::conventional::bump::Bump;
 use crate::conventional::error::BumpError;
 use crate::git::revspec::RevspecPattern;
 use colored::*;
 use conventional_commit_parser::commit::CommitType;
-use git2::Commit as Git2Commit;
+use git2::{Commit as Git2Commit};
 use itertools::Itertools;
 use log::info;
 use semver::Version;
 use std::fmt::Write;
+use crate::Tag;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VersionIncrement {
@@ -21,106 +22,10 @@ pub enum VersionIncrement {
     Manual(String),
 }
 
+
 impl VersionIncrement {
-    pub(crate) fn bump(
-        &self,
-        current_version: &Version,
-        repository: &Repository,
-    ) -> Result<Version, BumpError> {
-        match self {
-            VersionIncrement::Manual(version) => Version::parse(version).map_err(Into::into),
-            VersionIncrement::Auto => {
-                VersionIncrement::create_version_from_commit_history(current_version, repository)
-            }
-            VersionIncrement::Major => Ok(Version::new(current_version.major + 1, 0, 0)),
-            VersionIncrement::Patch => Ok(Version::new(
-                current_version.major,
-                current_version.minor,
-                current_version.patch + 1,
-            )),
-            VersionIncrement::Minor => Ok(Version::new(
-                current_version.major,
-                current_version.minor + 1,
-                0,
-            )),
-        }
-    }
-
-    fn create_version_from_commit_history(
-        current_version: &Version,
-        repository: &Repository,
-    ) -> Result<Version, BumpError> {
-        let changelog_start_oid = repository
-            .get_latest_tag_oid()
-            .unwrap_or_else(|_| repository.get_first_commit().unwrap());
-
-        let changelog_start_oid = changelog_start_oid.to_string();
-        let changelog_start_oid = Some(changelog_start_oid.as_str());
-
-        let pattern = changelog_start_oid
-            .map(|oid| format!("{}..", oid))
-            .unwrap_or_else(|| "..".to_string());
-        let pattern = pattern.as_str();
-        let pattern = RevspecPattern::from(pattern);
-        let commits = repository.get_commit_range(&pattern)?;
-
-        let commits: Vec<&Git2Commit> = commits
-            .commits
-            .iter()
-            .filter(|commit| !commit.message().unwrap_or("").starts_with("Merge "))
-            .collect();
-
-        VersionIncrement::display_history(&commits)?;
-
-        let conventional_commits: Vec<Commit> = commits
-            .iter()
-            .map(|commit| Commit::from_git_commit(commit))
-            .filter_map(Result::ok)
-            .collect();
-
-        let increment_type = VersionIncrement::version_increment_from_commit_history(
-            current_version,
-            &conventional_commits,
-        )?;
-
-        increment_type.bump(current_version, repository)
-    }
-
-    fn version_increment_from_commit_history(
-        current_version: &Version,
-        commits: &[Commit],
-    ) -> Result<VersionIncrement, BumpError> {
-        let is_major_bump = || {
-            current_version.major != 0
-                && commits
-                    .iter()
-                    .any(|commit| commit.message.is_breaking_change)
-        };
-
-        let is_minor_bump = || {
-            commits
-                .iter()
-                .any(|commit| commit.message.commit_type == CommitType::Feature)
-        };
-
-        let is_patch_bump = || {
-            commits
-                .iter()
-                .any(|commit| commit.message.commit_type == CommitType::BugFix)
-        };
-
-        if is_major_bump() {
-            Ok(VersionIncrement::Major)
-        } else if is_minor_bump() {
-            Ok(VersionIncrement::Minor)
-        } else if is_patch_bump() {
-            Ok(VersionIncrement::Patch)
-        } else {
-            Err(BumpError::NoCommitFound)
-        }
-    }
-
-    fn display_history(commits: &[&Git2Commit]) -> Result<(), fmt::Error> {
+    // TODO: move that to a dedicated CLI display module
+    pub(crate) fn display_history(commits: &[&Git2Commit]) -> Result<(), fmt::Error> {
         let conventional_commits: Vec<Result<_, _>> = commits
             .iter()
             .map(|commit| Commit::from_git_commit(commit))
